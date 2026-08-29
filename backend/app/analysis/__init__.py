@@ -1,0 +1,1 @@
+"""Diff / static-analysis package."""

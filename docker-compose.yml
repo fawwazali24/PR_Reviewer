@@ -1,0 +1,60 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: prr
+      POSTGRES_PASSWORD: prr
+      POSTGRES_DB: prr
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prr -d prr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      # Override the DB host so it points at the compose service, not localhost.
+      DATABASE_URL: postgresql+psycopg2://prr:prr@db:5432/prr
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      # Persist the downloaded sentence-transformers model between runs.
+      - hf_cache:/root/.cache/huggingface
+    # Run migrations, then start the API.
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    # The browser (on the host) talks to the API at localhost:8000, which the
+    # backend already allows via CORS_ORIGINS. Install then run the Vite dev server.
+    environment:
+      VITE_API_BASE: http://localhost:8000
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume: keep container's linux node_modules, don't clobber with host's.
+      - /app/node_modules
+
+volumes:
+  pgdata:
+  hf_cache:
