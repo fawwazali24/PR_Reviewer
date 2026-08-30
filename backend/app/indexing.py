@@ -61,7 +61,11 @@ def run_indexing(repository_id: int) -> None:
                 return
             repo.indexing_status = IndexingStatus.INDEXING.value
             repo.indexing_error = None
-            owner, name, branch = repo.owner, repo.name, repo.default_branch
+
+            owner = repo.owner
+            name = repo.name
+            branch = repo.default_branch
+            repo_language = repo.language
 
         with GitHubClient() as gh:
             ref = branch or gh.get_repo(owner, name).get("default_branch")
@@ -69,13 +73,13 @@ def run_indexing(repository_id: int) -> None:
             tar_bytes = gh.download_tarball(owner, name, ref)
 
         chunks: list[ChunkData] = []
-        if repo.language == "python":
+        if repo_language == "python":
             for rel_path, source in _iter_python_files(tar_bytes):
                 chunks.extend(chunk_file(rel_path, source))
         else:
             logger.warning(
                 "indexing: language %r not supported yet (MVP is Python-only)",
-                repo.language,
+                repo_language,
             )
 
         with session_scope() as db:
@@ -87,6 +91,7 @@ def run_indexing(repository_id: int) -> None:
 
             repo.indexed_at = datetime.now(timezone.utc)
             repo.indexing_error = None
+
         logger.info("indexing complete for %s/%s: %s", owner, name, stats)
 
     except Exception as exc:  # noqa: BLE001 - background task must not crash silently
