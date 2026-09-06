@@ -6,7 +6,6 @@ Two jobs:
   2. Verification: cheaply answer "does this symbol actually exist in the file?"
      for the deterministic checks in the verification layer.
 
-Python-only for the MVP (plan change #7); add grammars per language later.
 """
 from __future__ import annotations
 

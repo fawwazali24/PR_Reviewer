@@ -65,8 +65,13 @@ def _summary_from_json(pr: dict[str, Any]) -> PullRequestSummary:
 def list_open_pull_requests(
     client: GitHubClient, owner: str, repo: str
 ) -> list[PullRequestSummary]:
-    """Live, read-only listing of open PRs (never persisted)."""
-    return [_summary_from_json(pr) for pr in client.list_open_pull_requests(owner, repo)]
+    summaries = []
+
+    for pr in client.list_open_pull_requests(owner, repo):
+        details = client.get_pull_request(owner, repo, pr["number"])
+        summaries.append(_summary_from_json(details))
+
+    return summaries
 
 
 def get_pull_request_detail(
