@@ -1,5 +1,5 @@
 import type { ReviewDetail } from "../types";
-import { fmtTime, shortSha } from "./ui";
+import { fmtDuration, fmtTime, shortSha } from "./ui";
 
 // Top-of-review summary: the reviewer's overall take, the reviewed commit, the
 // changed-file roster, and severity counts.
@@ -72,6 +72,13 @@ export default function ReviewSummary({ review }: { review: ReviewDetail }) {
           </div>
         </>
       )}
+
+      <div
+        className="faint small"
+        style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}
+      >
+        Review duration: <span className="mono" style={{ marginLeft: 6 }}>{fmtDuration(review.started_at, review.completed_at)}</span>
+      </div>
     </div>
   );
 }

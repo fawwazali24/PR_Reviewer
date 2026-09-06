@@ -12,7 +12,7 @@ export default function App() {
         <span className="badge">read-only</span>
         <div className="spacer" />
         <span className="faint small">
-          surfaces reviewer-style findings CI/CD & linters miss
+          
         </span>
       </header>
       <Routes>

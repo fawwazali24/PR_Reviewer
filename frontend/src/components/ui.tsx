@@ -32,6 +32,21 @@ export function fmtTime(iso: string | null | undefined): string {
   });
 }
 
+export function fmtDuration(
+  startedAt: string | null | undefined,
+  completedAt: string | null | undefined
+): string {
+  if (!startedAt || !completedAt) return "—";
+  const started = new Date(startedAt).getTime();
+  const completed = new Date(completedAt).getTime();
+  if (!Number.isFinite(started) || !Number.isFinite(completed)) return "—";
+
+  const seconds = Math.max(0, Math.round((completed - started) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s`;
+}
+
 export function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100);
   return (

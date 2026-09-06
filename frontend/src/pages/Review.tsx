@@ -100,9 +100,7 @@ export default function Review() {
       {running && (
         <div className="panel">
           <div className="panel-title-row">
-            <h2>
-              Review #{id} · {status!.status}
-            </h2>
+            <h2>Review · {status!.status}</h2>
             <span className="faint small mono">{shortSha(status!.head_sha)}</span>
           </div>
           <div className="stage-line">
