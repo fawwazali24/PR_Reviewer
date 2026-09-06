@@ -1,9 +1,4 @@
 """System prompts and prompt assembly for the review + verification calls.
-
-The wording here is where the "reviewer, not linter" behavior lives (plan
-Phase 5): findings should read like a senior reviewer's open question, the PR
-description is treated as stated intent, retrieval supplies business rules, and
-CI-covered checks (syntax/style/known-vuln patterns) are explicitly out of scope.
 """
 from __future__ import annotations
 

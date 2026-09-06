@@ -2,7 +2,7 @@
 
 These are pure functions over the finding + the PR's diffs + (when available)
 the head-commit source of the changed file. They answer mechanical questions
-with plain code so we don't waste a second LLM call on them (plan change #3):
+with plain code so we don't waste a second LLM call on them:
 
   file_matches      finding points at a file the PR actually changed
   line_in_diff      finding's lines overlap the PR's ADDED lines (PR attribution)
