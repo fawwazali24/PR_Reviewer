@@ -99,6 +99,41 @@ def top_level_symbols(source: str) -> list[Symbol]:
     return out
 
 
+def class_method_symbols(source: str, class_name: str) -> list[Symbol]:
+    """Return methods defined directly inside a named top-level class."""
+    source_bytes = source.encode("utf-8")
+    tree = _get_parser().parse(source_bytes)
+    for child in tree.root_node.children:
+        if child.type != "class_definition":
+            continue
+        name_node = child.child_by_field_name("name")
+        name = _node_text(name_node, source_bytes) if name_node else "<anonymous>"
+        if name != class_name:
+            continue
+        body = child.child_by_field_name("body")
+        if body is None:
+            return []
+        methods: list[Symbol] = []
+        for member in body.children:
+            if member.type != "function_definition":
+                continue
+            member_name = member.child_by_field_name("name")
+            method_name = (
+                _node_text(member_name, source_bytes) if member_name else "<anonymous>"
+            )
+            methods.append(
+                Symbol(
+                    method_name,
+                    "method",
+                    member.start_point[0] + 1,
+                    member.end_point[0] + 1,
+                    class_name,
+                )
+            )
+        return methods
+    return []
+
+
 def enclosing_symbols(source: str, changed_ranges: list[tuple[int, int]]) -> list[Symbol]:
     """Symbols whose span intersects any changed line range."""
     if not changed_ranges:

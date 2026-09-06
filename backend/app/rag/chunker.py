@@ -11,16 +11,17 @@ import hashlib
 import re
 from dataclasses import dataclass
 
-from app.analysis.tree_sitter import top_level_symbols
+from app.analysis.tree_sitter import class_method_symbols, top_level_symbols
 
 _TEST_PATH_RE = re.compile(r"(^|/)(tests?|testing)(/|$)|(^|/)test_[^/]*\.py$|_test\.py$", re.IGNORECASE)
+_LARGE_CLASS_LINES = 80
 
 
 @dataclass
 class ChunkData:
     file_path: str
     symbol_name: str | None
-    chunk_type: str          # function | class | module
+    chunk_type: str          # function | class | class_context | method | module
     start_line: int
     end_line: int
     content: str
@@ -76,6 +77,25 @@ def chunk_file(file_path: str, source: str) -> list[ChunkData]:
         chunks.append(make(None, "module", 1, header_end))
 
     for sym in symbols:
+        if sym.kind == "class" and sym.end_line - sym.start_line + 1 > _LARGE_CLASS_LINES:
+            methods = class_method_symbols(source, sym.name)
+            if methods:
+                first_method_start = min(method.start_line for method in methods)
+                context_end = first_method_start - 1
+                if _slice(lines, sym.start_line, context_end).strip():
+                    chunks.append(
+                        make(sym.name, "class_context", sym.start_line, context_end)
+                    )
+                for method in methods:
+                    chunks.append(
+                        make(
+                            method.qualified_name,
+                            "method",
+                            method.start_line,
+                            method.end_line,
+                        )
+                    )
+                continue
         chunks.append(make(sym.name, sym.kind, sym.start_line, sym.end_line))
 
     if not chunks:  # file had only whitespace between symbols, etc.

@@ -37,6 +37,23 @@ def test_chunk_file_produces_module_and_symbol_chunks():
     assert cls_chunk.chunk_type == "class"
 
 
+def test_large_class_is_split_into_class_context_and_method_chunks():
+    source = "class Huge:\n" + "\n".join(
+        f"    def method_{i}(self):\n        return {i}" for i in range(45)
+    )
+
+    chunks = chunk_file("app/large.py", source)
+
+    context = next(c for c in chunks if c.chunk_type == "class_context")
+    methods = [c for c in chunks if c.chunk_type == "method"]
+    assert context.symbol_name == "Huge"
+    assert len(methods) == 45
+    assert {c.symbol_name for c in methods} == {
+        f"Huge.method_{i}" for i in range(45)
+    }
+    assert all("def method_" in c.content for c in methods)
+
+
 def test_module_chunk_holds_the_header_only():
     chunks = chunk_file("app/service.py", SOURCE)
     module_chunk = next(c for c in chunks if c.chunk_type == "module")
