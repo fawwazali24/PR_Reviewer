@@ -54,6 +54,17 @@ def test_large_class_is_split_into_class_context_and_method_chunks():
     assert all("def method_" in c.content for c in methods)
 
 
+def test_decorated_definition_keeps_decorator_in_chunk_content():
+    source = "@decorator\ndef decorated():\n    pass\n"
+
+    chunks = chunk_file("app/decorated.py", source)
+
+    assert len(chunks) == 1
+    assert chunks[0].symbol_name == "decorated"
+    assert chunks[0].start_line == 1
+    assert chunks[0].content.startswith("@decorator")
+
+
 def test_module_chunk_holds_the_header_only():
     chunks = chunk_file("app/service.py", SOURCE)
     module_chunk = next(c for c in chunks if c.chunk_type == "module")

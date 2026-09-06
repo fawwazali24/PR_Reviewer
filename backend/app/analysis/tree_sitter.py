@@ -48,6 +48,17 @@ def _node_text(node: Any, source_bytes: bytes) -> str:
     return source_bytes[node.start_byte : node.end_byte].decode("utf-8", "replace")
 
 
+def _definition_node(node: Any) -> Any | None:
+    if node.type in _DEF_TYPES:
+        return node
+    if node.type == "decorated_definition":
+        return next(
+            (child for child in node.children if child.type in _DEF_TYPES),
+            None,
+        )
+    return None
+
+
 def parse_symbols(source: str) -> list[Symbol]:
     """Return every function/class/method definition with its line span."""
     source_bytes = source.encode("utf-8")
@@ -56,26 +67,27 @@ def parse_symbols(source: str) -> list[Symbol]:
 
     def visit(node: Any, class_parent: str | None) -> None:
         for child in node.children:
-            if child.type in _DEF_TYPES:
-                name_node = child.child_by_field_name("name")
+            definition = _definition_node(child)
+            if definition is not None:
+                name_node = definition.child_by_field_name("name")
                 name = _node_text(name_node, source_bytes) if name_node else "<anonymous>"
-                if child.type == "class_definition":
+                start_line = child.start_point[0] + 1
+                end_line = child.end_point[0] + 1
+                if definition.type == "class_definition":
                     kind = "class"
                     symbols.append(
-                        Symbol(name, kind, child.start_point[0] + 1,
-                               child.end_point[0] + 1, class_parent)
+                        Symbol(name, kind, start_line, end_line, class_parent)
                     )
                     # Recurse into the class body so methods get parent=name.
-                    body = child.child_by_field_name("body")
+                    body = definition.child_by_field_name("body")
                     if body is not None:
                         visit(body, name)
                 else:
                     kind = "method" if class_parent else "function"
                     symbols.append(
-                        Symbol(name, kind, child.start_point[0] + 1,
-                               child.end_point[0] + 1, class_parent)
+                        Symbol(name, kind, start_line, end_line, class_parent)
                     )
-                    body = child.child_by_field_name("body")
+                    body = definition.child_by_field_name("body")
                     if body is not None:
                         visit(body, class_parent)
             else:
@@ -91,11 +103,14 @@ def top_level_symbols(source: str) -> list[Symbol]:
     tree = _get_parser().parse(source_bytes)
     out: list[Symbol] = []
     for child in tree.root_node.children:
-        if child.type in _DEF_TYPES:
-            name_node = child.child_by_field_name("name")
+        definition = _definition_node(child)
+        if definition is not None:
+            name_node = definition.child_by_field_name("name")
             name = _node_text(name_node, source_bytes) if name_node else "<anonymous>"
-            kind = "class" if child.type == "class_definition" else "function"
-            out.append(Symbol(name, kind, child.start_point[0] + 1, child.end_point[0] + 1))
+            kind = "class" if definition.type == "class_definition" else "function"
+            out.append(
+                Symbol(name, kind, child.start_point[0] + 1, child.end_point[0] + 1)
+            )
     return out
 
 
@@ -104,20 +119,22 @@ def class_method_symbols(source: str, class_name: str) -> list[Symbol]:
     source_bytes = source.encode("utf-8")
     tree = _get_parser().parse(source_bytes)
     for child in tree.root_node.children:
-        if child.type != "class_definition":
+        definition = _definition_node(child)
+        if definition is None or definition.type != "class_definition":
             continue
-        name_node = child.child_by_field_name("name")
+        name_node = definition.child_by_field_name("name")
         name = _node_text(name_node, source_bytes) if name_node else "<anonymous>"
         if name != class_name:
             continue
-        body = child.child_by_field_name("body")
+        body = definition.child_by_field_name("body")
         if body is None:
             return []
         methods: list[Symbol] = []
         for member in body.children:
-            if member.type != "function_definition":
+            method_definition = _definition_node(member)
+            if method_definition is None or method_definition.type != "function_definition":
                 continue
-            member_name = member.child_by_field_name("name")
+            member_name = method_definition.child_by_field_name("name")
             method_name = (
                 _node_text(member_name, source_bytes) if member_name else "<anonymous>"
             )
