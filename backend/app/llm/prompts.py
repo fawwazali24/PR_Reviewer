@@ -13,7 +13,6 @@ ALLOWED_CATEGORIES = [
     "security",
     "cross_file",
     "maintainability",
-    "test_coverage",
 ]
 
 SYSTEM_PROMPT = """\
@@ -35,7 +34,7 @@ the domain expects. Do not invent rules that aren't evidenced.
   3. CONTEXT-DEPENDENT security — issues a pattern rule can't see, e.g. a missing \
 ownership/authorization check, trusting unvalidated input across a boundary.
   4. CROSS-FILE consistency — a change here that breaks an assumption made there.
-  5. MISSING TEST COVERAGE for genuinely new or changed logic.
+  5. Do NOT report missing test coverage; test coverage is handled by CI/CD.
 
 Rules:
   - EVIDENCE REQUIRED: only flag an issue you can point to concrete evidence for \
