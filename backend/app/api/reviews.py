@@ -74,6 +74,14 @@ def trigger_review(
     pr.head_sha = head_sha
     pr.base_sha = base.get("sha")
     pr.base_ref = base.get("ref")
+    pr.github_updated_at = (
+        datetime.fromisoformat(pr_json["updated_at"].replace("Z", "+00:00"))
+        if pr_json.get("updated_at")
+        else None
+    )
+    pr.additions = pr_json.get("additions", 0) or 0
+    pr.deletions = pr_json.get("deletions", 0) or 0
+    pr.changed_files = pr_json.get("changed_files", 0) or 0
     db.flush()
 
     # Guard: don't burn an LLM call re-reviewing an unchanged commit.

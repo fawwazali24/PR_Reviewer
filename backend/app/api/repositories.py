@@ -1,10 +1,12 @@
-"""Repository registration + live PR browsing.
+"""Repository registration + cached PR browsing.
 
-Repos enter the system ONLY through the registration endpoint here (there is no
-auto-discovery with a PAT). Browsing open PRs is a live, read-only GitHub call
-that is not persisted.
+Repos enter the system ONLY through the registration endpoint here. Cached PR
+data is read from PostgreSQL; the explicit refresh endpoint fetches GitHub and
+updates the cache.
 """
 from __future__ import annotations
+
+from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
@@ -68,8 +70,46 @@ def get_repository(repository_id: int, db: Session = Depends(get_db)) -> Reposit
     return repo
 
 
+def _pull_request_out(pr: PullRequest) -> PullRequestOut:
+    latest = pr.reviews[0] if pr.reviews else None
+    return PullRequestOut(
+        number=pr.number,
+        title=pr.title,
+        author=pr.author,
+        state=pr.state,
+        html_url=pr.html_url,
+        head_sha=pr.head_sha,
+        base_sha=pr.base_sha,
+        updated_at=pr.github_updated_at.isoformat() if pr.github_updated_at else None,
+        additions=pr.additions,
+        deletions=pr.deletions,
+        changed_files=pr.changed_files,
+        last_reviewed_sha=pr.last_reviewed_sha,
+        up_to_date=bool(pr.last_reviewed_sha and pr.last_reviewed_sha == pr.head_sha),
+        latest_review_id=latest.id if latest else None,
+        latest_review_status=latest.status if latest else None,
+    )
+
+
+def _cached_open_pulls(repository_id: int, db: Session) -> list[PullRequestOut]:
+    rows = db.scalars(
+        select(PullRequest)
+        .where(PullRequest.repository_id == repository_id, PullRequest.state == "open")
+        .order_by(PullRequest.github_updated_at.desc())
+    )
+    return [_pull_request_out(pr) for pr in rows]
+
+
 @router.get("/{repository_id}/pulls", response_model=list[PullRequestOut])
 def list_pulls(repository_id: int, db: Session = Depends(get_db)) -> list[PullRequestOut]:
+    repo = db.get(Repository, repository_id)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    return _cached_open_pulls(repo.id, db)
+
+
+@router.post("/{repository_id}/pulls/refresh", response_model=list[PullRequestOut])
+def refresh_pulls(repository_id: int, db: Session = Depends(get_db)) -> list[PullRequestOut]:
     repo = db.get(Repository, repository_id)
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -80,38 +120,38 @@ def list_pulls(repository_id: int, db: Session = Depends(get_db)) -> list[PullRe
     except GitHubError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from exc
 
-    # Merge in local review state so the dashboard can gate the Review button.
     stored = {
         pr.number: pr
         for pr in db.scalars(
             select(PullRequest).where(PullRequest.repository_id == repo.id)
         )
     }
-
-    out: list[PullRequestOut] = []
-    for s in live:
-        local = stored.get(s.number)
-        latest = local.reviews[0] if (local and local.reviews) else None
-        out.append(
-            PullRequestOut(
-                number=s.number,
-                title=s.title,
-                author=s.author,
-                state=s.state,
-                html_url=s.html_url,
-                head_sha=s.head_sha,
-                base_sha=s.base_sha,
-                updated_at=s.updated_at,
-                additions=s.additions,
-                deletions=s.deletions,
-                changed_files=s.changed_files,
-                last_reviewed_sha=local.last_reviewed_sha if local else None,
-                up_to_date=bool(local and local.last_reviewed_sha == s.head_sha),
-                latest_review_id=latest.id if latest else None,
-                latest_review_status=latest.status if latest else None,
-            )
+    for summary in live:
+        pr = stored.get(summary.number)
+        if pr is None:
+            pr = PullRequest(repository_id=repo.id, number=summary.number)
+            db.add(pr)
+        pr.title = summary.title
+        pr.author = summary.author
+        pr.state = summary.state
+        pr.html_url = summary.html_url
+        pr.head_sha = summary.head_sha
+        pr.base_sha = summary.base_sha
+        pr.github_updated_at = (
+            datetime.fromisoformat(summary.updated_at.replace("Z", "+00:00"))
+            if summary.updated_at
+            else None
         )
-    return out
+        pr.additions = summary.additions
+        pr.deletions = summary.deletions
+        pr.changed_files = summary.changed_files
+
+    live_numbers = {summary.number for summary in live}
+    for pr in stored.values():
+        if pr.number not in live_numbers:
+            pr.state = "closed"
+    db.commit()
+    return _cached_open_pulls(repo.id, db)
 
 
 @router.post("/{repository_id}/index", status_code=202)

@@ -77,6 +77,9 @@ export const api = {
 
   listPulls: (id: number) => request<PullRequest[]>(`/repositories/${id}/pulls`),
 
+  refreshPulls: (id: number) =>
+    request<PullRequest[]>(`/repositories/${id}/pulls/refresh`, { method: "POST" }),
+
   // ---- reviews ----
   triggerReview: (repository_id: number, pr_number: number, force = false) =>
     request<ReviewTriggerResponse>("/reviews/trigger", {

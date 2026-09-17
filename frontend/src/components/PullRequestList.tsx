@@ -4,7 +4,7 @@ import { api, ApiError } from "../services/api";
 import type { PullRequest, Repository } from "../types";
 import { fmtTime, shortSha } from "./ui";
 
-// Live open PRs for the selected repo (a read-only GitHub call, not persisted).
+// Cached open PRs for the selected repo; GitHub is queried only by refresh.
 // The "Review" button is gated on `up_to_date` so we never burn an LLM call
 // re-reviewing an unchanged commit; a force re-review is still one click away.
 export default function PullRequestList({ repo }: { repo: Repository }) {
@@ -15,11 +15,11 @@ export default function PullRequestList({ repo }: { repo: Repository }) {
   const [busyNumber, setBusyNumber] = useState<number | null>(null);
   const [forceFor, setForceFor] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
     setLoading(true);
     setErr(null);
     try {
-      setPulls(await api.listPulls(repo.id));
+      setPulls(await (refresh ? api.refreshPulls(repo.id) : api.listPulls(repo.id)));
     } catch (e) {
       setErr(e instanceof ApiError ? e.detail : String(e));
       setPulls([]);
@@ -56,7 +56,7 @@ export default function PullRequestList({ repo }: { repo: Repository }) {
     <div className="panel">
       <div className="panel-title-row">
         <h2>Open pull requests · {repo.full_name}</h2>
-        <button className="ghost small" onClick={load} disabled={loading}>
+        <button className="ghost small" onClick={() => load(true)} disabled={loading}>
           {loading ? "loading…" : "refresh"}
         </button>
       </div>
@@ -65,7 +65,7 @@ export default function PullRequestList({ repo }: { repo: Repository }) {
 
       {loading && !pulls && (
         <div className="stage-line">
-          <span className="spinner" /> Fetching open PRs from GitHub…
+          <span className="spinner" /> Loading cached pull requests…
         </div>
       )}
 

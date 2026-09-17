@@ -1,14 +1,10 @@
-"""A pull request we've persisted (only once a review is triggered on it).
-
-Live browsing of open PRs is a direct GitHub call and is NOT stored — a row
-appears here the moment someone clicks "Review", so we can track
-``last_reviewed_sha`` and attach Reviews.
-"""
+"""A cached pull request summary with locally stored review state."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -39,6 +35,12 @@ class PullRequest(Base, TimestampMixin):
     head_sha: Mapped[str] = mapped_column(String(64), nullable=False)
     base_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
     base_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    github_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    additions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deletions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    changed_files: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Guard against reviewing the same commit twice (plan change #5).
     last_reviewed_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
